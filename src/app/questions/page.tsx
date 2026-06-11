@@ -7,7 +7,7 @@ import { subjects } from "@/data/subjects";
 
 export const metadata: Metadata = {
   title: "問題一覧",
-  description: "第76回獣医師国家試験の必須問題、A問題、B問題を区分別に検索できます。",
+  description: "第75/76回獣医師国家試験の必須問題、A問題、B問題を区分別に検索できます。",
   openGraph: {
     title: "問題一覧",
     description: "必須問題、A問題、B問題を独立したタブとカテゴリフィルタで確認できます。",
@@ -28,7 +28,7 @@ export default function QuestionsPage() {
         </p>
         <h1 className="text-3xl font-extrabold leading-tight sm:text-4xl">問題一覧</h1>
         <p className="mt-3 max-w-2xl text-base leading-8 text-muted">
-          第76回獣医師国家試験を、必須問題、A問題、B問題の区分ごとに絞り込めます。
+          第75/76回獣医師国家試験を、必須問題、A問題、B問題の区分ごとに絞り込めます。
           分野タグやキーワード検索との組み合わせにも対応しています。
         </p>
       </section>

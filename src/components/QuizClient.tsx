@@ -10,11 +10,12 @@ type QuizStats = {
   answered: number;
   correct: number;
   bookmarks: string[];
+  incorrectSlugs: string[];
 };
 
-const storageKey = "vet-exam-notes:quiz:76-ab";
+const storageKey = "vet-exam-notes:quiz:75-76-required-ab-339";
 const customPracticeStorageKey = "vet-exam-notes:custom-practice-slugs";
-const initialStats: QuizStats = { answered: 0, correct: 0, bookmarks: [] };
+const initialStats: QuizStats = { answered: 0, correct: 0, bookmarks: [], incorrectSlugs: [] };
 
 function parseStringArray(value: string | null) {
   if (!value) return [];
@@ -38,6 +39,9 @@ function parseQuizStats(value: string | null): QuizStats {
       correct: typeof parsed.correct === "number" ? parsed.correct : 0,
       bookmarks: Array.isArray(parsed.bookmarks)
         ? parsed.bookmarks.filter((item): item is string => typeof item === "string")
+        : [],
+      incorrectSlugs: Array.isArray(parsed.incorrectSlugs)
+        ? parsed.incorrectSlugs.filter((item): item is string => typeof item === "string")
         : []
     };
   } catch {
@@ -65,6 +69,7 @@ export function QuizClient({
   const current = activeQuestions[index];
   const isCorrect = selected ? current.correctChoiceIds.includes(selected) : false;
   const bookmarked = stats.bookmarks.includes(current.slug);
+  const difficultyScore = current.difficulty === "難" ? 8 : current.difficulty === "標準" ? 5 : 3;
 
   useEffect(() => {
     if (!useCustomSelection) return;
@@ -99,7 +104,10 @@ export function QuizClient({
     setStats((value) => ({
       ...value,
       answered: value.answered + 1,
-      correct: value.correct + (correct ? 1 : 0)
+      correct: value.correct + (correct ? 1 : 0),
+      incorrectSlugs: correct
+        ? value.incorrectSlugs.filter((slug) => slug !== current.slug)
+        : Array.from(new Set([...value.incorrectSlugs, current.slug]))
     }));
   }
 
@@ -170,6 +178,9 @@ export function QuizClient({
           <span className="rounded-full bg-paper px-2.5 py-1 text-xs font-bold text-muted">
             第{current.examYear}回 {current.section}問題
           </span>
+          <span className="rounded-full bg-amber/25 px-2.5 py-1 text-xs font-bold text-ink">
+            難易度 {difficultyScore}/10
+          </span>
           <button
             type="button"
             onClick={toggleBookmark}
@@ -182,7 +193,7 @@ export function QuizClient({
           </button>
         </div>
         <h2 className="text-xl font-extrabold leading-relaxed">{current.title}</h2>
-        <p className="mt-3 text-base leading-8 text-ink">{current.body}</p>
+        <p className="mt-3 whitespace-pre-line text-base leading-8 text-ink">{current.body}</p>
         <div className="mt-5 grid gap-2">
           {current.choices.map((choice) => {
             const isSelected = selected === choice.id;
@@ -218,6 +229,11 @@ export function QuizClient({
               {isCorrect ? "正解" : "不正解"}
             </p>
             <h3 className="text-base font-extrabold">解説</h3>
+            {!isCorrect && (
+              <p className="mt-2 rounded-lg bg-white px-3 py-2 text-sm font-bold text-coral">
+                この問題は不正解として端末内に記録しました。将来はSupabaseの userAnswers に接続できます。
+              </p>
+            )}
             <p className="mt-2 text-sm leading-8 text-ink">{current.explanation}</p>
             <div className="mt-4">
               <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-leaf">

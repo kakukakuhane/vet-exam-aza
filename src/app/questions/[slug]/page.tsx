@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ChevronRight } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronRight, Video } from "lucide-react";
 import { ImportanceBadge } from "@/components/badges";
 import { getQuestion } from "@/lib/data";
 import { getQuestionSectionLabel } from "@/lib/questionSections";
@@ -81,7 +81,7 @@ export default async function QuestionDetailPage({ params }: PageProps) {
         </div>
 
         <h1 className="text-2xl font-extrabold leading-relaxed sm:text-3xl">{question.title}</h1>
-        <p className="mt-4 rounded-lg bg-paper p-4 text-base leading-8">{question.body}</p>
+        <p className="mt-4 whitespace-pre-line rounded-lg bg-paper p-4 text-base leading-8">{question.body}</p>
 
         <div className="mt-6 grid gap-2">
           {question.choices.map((choice) => {
@@ -102,7 +102,7 @@ export default async function QuestionDetailPage({ params }: PageProps) {
           })}
         </div>
 
-        <section className="mt-7 rounded-lg border border-line bg-paper p-4">
+        <section id="explanation" className="mt-7 rounded-lg border border-line bg-paper p-4">
           <div className="flex items-center gap-2">
             <CheckCircle2 size={20} className="text-leaf" aria-hidden />
             <h2 className="text-lg font-extrabold">正答と解説</h2>
@@ -146,6 +146,21 @@ export default async function QuestionDetailPage({ params }: PageProps) {
             </Link>
           ))}
         </div>
+      </section>
+
+      <section className="mt-6 rounded-lg border border-line bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Video size={19} className="text-leaf" aria-hidden />
+            <h2 className="text-lg font-extrabold">関連講義</h2>
+          </div>
+          <span className="rounded-full bg-amber/25 px-2.5 py-1 text-xs font-extrabold text-ink">
+            Coming soon
+          </span>
+        </div>
+        <p className="mt-3 text-sm leading-7 text-muted">
+          将来はこの問題の分野に対応する講義動画へ移動できるようにします。動画視聴後に関連問題を解く導線にも拡張予定です。
+        </p>
       </section>
     </div>
   );

@@ -1,8 +1,8 @@
 export const quizSets = [
   {
     id: "basic-67-2",
-    title: "第76回 A/B問題 全問演習",
-    description: "第76回獣医師国家試験A/B問題159問を1問ずつ確認します。",
+    title: "第75/76回 必須/A/B問題 全問演習",
+    description: "第75/76回獣医師国家試験の必須/A/B問題339問を1問ずつ確認します。",
     questionSlugs: ["*"]
   },
   {

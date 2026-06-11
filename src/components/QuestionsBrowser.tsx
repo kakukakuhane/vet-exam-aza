@@ -42,6 +42,8 @@ export function QuestionsBrowser({ questions, subjects }: QuestionsBrowserProps)
       return matchesSubject && matchesSection && (!word || searchable.includes(word));
     });
   }, [query, questions, section, subjectSlug]);
+  const hasActiveFilter = query.trim().length > 0 || subjectSlug !== "all" || section !== "all";
+  const displayedQuestions = hasActiveFilter ? visibleQuestions : visibleQuestions.slice(0, 24);
 
   return (
     <div>
@@ -93,12 +95,16 @@ export function QuestionsBrowser({ questions, subjects }: QuestionsBrowserProps)
             ))}
           </select>
         </div>
-        <p className="mt-3 text-sm font-semibold text-muted">{visibleQuestions.length}問を表示中</p>
+        <p className="mt-3 text-sm font-semibold text-muted">
+          {hasActiveFilter
+            ? `${visibleQuestions.length}問を表示中`
+            : `条件未指定のため${displayedQuestions.length}問だけ表示中。検索やタブで絞り込めます。`}
+        </p>
       </section>
 
-      {visibleQuestions.length > 0 ? (
+      {displayedQuestions.length > 0 ? (
         <section className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {visibleQuestions.map((question) => (
+          {displayedQuestions.map((question) => (
             <QuestionCard key={question.slug} question={question} />
           ))}
         </section>

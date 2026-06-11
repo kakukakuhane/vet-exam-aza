@@ -20,11 +20,27 @@ export function SearchBox({ questions, subjects, articles }: SearchBoxProps) {
     if (!word) return [];
 
     const questionResults = questions
-      .filter((item) => `${item.title} ${item.subject} ${item.exam}`.toLowerCase().includes(word))
+      .filter((item) =>
+        [
+          item.questionNumber,
+          item.title,
+          item.body,
+          item.subject,
+          item.category,
+          item.exam,
+          item.point,
+          item.explanation,
+          ...item.choices.map((choice) => choice.text)
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(word)
+      )
       .map((item) => ({
         href: `/questions/${item.slug}`,
         title: item.title,
-        label: `${getQuestionSectionLabel(item)} / ${item.subject}`
+        label: `${item.questionNumber ?? getQuestionSectionLabel(item)} / ${item.subject}`
       }));
 
     const subjectResults = subjects
