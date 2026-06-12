@@ -89,7 +89,10 @@ function MultiSelectDropdown({
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => onToggle(option.value)}
+                    onChange={() => {
+                      onToggle(option.value);
+                      setOpen(false);
+                    }}
                     className="h-4 w-4 accent-ink"
                   />
                   <span>{option.label}</span>
@@ -226,6 +229,13 @@ export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
   }
 
   function startPractice() {
+    if (extractedQuestions.length === 0) {
+      setIsPracticeMode(false);
+      setCurrentQuestion(null);
+      setMessage("先に条件に合う問題を抽出してください。");
+      return;
+    }
+
     const question = pickRandomQuestion(extractedQuestions);
 
     setCurrentQuestion(question);
@@ -354,7 +364,7 @@ export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
             className="on-dark inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-extrabold sm:w-auto"
           >
             <PlayCircle size={18} aria-hidden />
-            抽出した問題を解く
+            抽出した問題を演習する
           </button>
         </div>
       )}
@@ -391,7 +401,7 @@ export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
         </div>
       )}
 
-      {currentQuestion && (
+      {isPracticeMode && currentQuestion && (
         <article className="mt-5 rounded-lg border border-line bg-white p-4 shadow-sm sm:p-5">
           <p className="mb-3 text-sm font-extrabold text-leaf">
             {shownSlugs.length}問目 / 全{extractedQuestions.length}問
