@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, Filter, PlayCircle, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, Filter, PlayCircle, RotateCcw, Search, XCircle } from "lucide-react";
 import type { ExamSection, PracticeFilters, Question, Subject } from "@/data/types";
 import { defaultPracticeFilters, filterQuestions, getAvailableExamYears } from "@/lib/practice";
 
@@ -105,25 +105,16 @@ function MultiSelectDropdown({
 
 function pickRandomQuestion(
   candidates: Question[],
-  previousSlug?: string,
-  shownSlugs: string[] = []
+  excludedSlugs: string[] = [],
+  previousSlug?: string
 ) {
-  if (candidates.length === 0) {
-    return { question: null, completedCycle: false };
-  }
-
-  let available = candidates.filter((question) => !shownSlugs.includes(question.slug));
-  const completedCycle = available.length === 0;
-
-  if (completedCycle) {
-    available = candidates;
-  }
-
+  const available = candidates.filter((question) => !excludedSlugs.includes(question.slug));
+  if (available.length === 0) return null;
   const withoutImmediateRepeat = available.filter((question) => question.slug !== previousSlug);
   const finalCandidates = withoutImmediateRepeat.length > 0 ? withoutImmediateRepeat : available;
   const index = Math.floor(Math.random() * finalCandidates.length);
 
-  return { question: finalCandidates[index], completedCycle };
+  return finalCandidates[index];
 }
 
 function makeFilters(
@@ -172,11 +163,15 @@ export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
   const [selectedYears, setSelectedYears] = useState<string[]>(yearOptions.map((option) => option.value));
   const [selectedSections, setSelectedSections] = useState<string[]>(sectionOptions.map((option) => option.value));
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  const [practicePool, setPracticePool] = useState<Question[]>([]);
+  const [extractedQuestions, setExtractedQuestions] = useState<Question[]>([]);
+  const [hasExtracted, setHasExtracted] = useState(false);
+  const [isPracticeMode, setIsPracticeMode] = useState(false);
+  const [isSessionComplete, setIsSessionComplete] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [shownSlugs, setShownSlugs] = useState<string[]>([]);
+  const [correctCount, setCorrectCount] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
 
   const previewCount = useMemo(() => {
@@ -205,9 +200,12 @@ export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
     setShowExplanation(false);
   }
 
-  function startPractice() {
+  function extractQuestions() {
     if (selectedYears.length === 0 || selectedSections.length === 0) {
-      setPracticePool([]);
+      setExtractedQuestions([]);
+      setHasExtracted(true);
+      setIsPracticeMode(false);
+      setIsSessionComplete(false);
       setCurrentQuestion(null);
       setMessage("年度と問題区分を1つ以上選択してください。");
       return;
@@ -215,37 +213,69 @@ export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
 
     const filters = makeFilters(selectedYears, selectedSections, selectedSubjects);
     const filtered = filterQuestions(questions, filters);
-    const { question } = pickRandomQuestion(filtered);
 
-    setPracticePool(filtered);
+    setExtractedQuestions(filtered);
+    setHasExtracted(true);
+    setIsPracticeMode(false);
+    setIsSessionComplete(false);
+    setCurrentQuestion(null);
+    setShownSlugs([]);
+    setCorrectCount(0);
+    resetAnswerState();
+    setMessage(filtered.length > 0 ? null : "条件に一致する問題がありません。条件を広げて再抽出してください。");
+  }
+
+  function startPractice() {
+    const question = pickRandomQuestion(extractedQuestions);
+
     setCurrentQuestion(question);
     setShownSlugs(question ? [question.slug] : []);
+    setIsPracticeMode(Boolean(question));
+    setIsSessionComplete(false);
+    setCorrectCount(0);
     resetAnswerState();
     setMessage(question ? null : "条件に一致する問題がありません。条件を広げて再抽出してください。");
   }
 
   function goToNextQuestion() {
     if (!currentQuestion) return;
-    const { question, completedCycle } = pickRandomQuestion(
-      practicePool,
-      currentQuestion.slug,
-      shownSlugs
-    );
+    const question = pickRandomQuestion(extractedQuestions, shownSlugs, currentQuestion.slug);
 
     if (!question) {
-      setMessage("次に出題できる問題がありません。条件を変更して再抽出してください。");
+      setCurrentQuestion(null);
+      setIsPracticeMode(false);
+      setIsSessionComplete(true);
+      setMessage(null);
       return;
     }
 
     setCurrentQuestion(question);
-    setShownSlugs(completedCycle ? [question.slug] : [...shownSlugs, question.slug]);
+    setShownSlugs([...shownSlugs, question.slug]);
     resetAnswerState();
-    setMessage(completedCycle ? "この条件の問題を一通り解き終えたため、もう一周します。" : null);
+    setMessage(null);
   }
 
   function answerQuestion(choiceId: string) {
+    if (!currentQuestion || showExplanation) return;
     setSelectedChoiceId(choiceId);
     setShowExplanation(true);
+    if (isCorrectChoice(currentQuestion, choiceId)) {
+      setCorrectCount((count) => count + 1);
+    }
+  }
+
+  function retrySameConditions() {
+    startPractice();
+  }
+
+  function changeConditions() {
+    setIsPracticeMode(false);
+    setIsSessionComplete(false);
+    setCurrentQuestion(null);
+    setShownSlugs([]);
+    setCorrectCount(0);
+    resetAnswerState();
+    setMessage(null);
   }
 
   return (
@@ -295,20 +325,39 @@ export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
 
       <div className="mt-5 flex flex-col gap-3 rounded-lg border border-line bg-paper p-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-extrabold">この条件でランダム出題</p>
+          <p className="text-sm font-extrabold">条件に合う問題を抽出</p>
           <p className="mt-1 text-xs font-semibold leading-6 text-muted">
-            抽出後は一覧を挟まず、1問ずつ解答と解説を確認できます。
+            まず対象問題を抽出し、その後に同じ条件で演習を開始できます。
           </p>
         </div>
         <button
           type="button"
-          onClick={startPractice}
+          onClick={extractQuestions}
           className="on-dark inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-extrabold"
         >
-          <PlayCircle size={18} aria-hidden />
-          抽出して開始
+          <Search size={18} aria-hidden />
+          抽出
         </button>
       </div>
+
+      {hasExtracted && extractedQuestions.length > 0 && !isPracticeMode && !isSessionComplete && (
+        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-line bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-base font-extrabold">抽出結果: {extractedQuestions.length}問</p>
+            <p className="mt-1 text-sm leading-7 text-muted">
+              抽出した問題だけを使って、1問ずつランダムに演習します。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={startPractice}
+            className="on-dark inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-extrabold sm:w-auto"
+          >
+            <PlayCircle size={18} aria-hidden />
+            抽出した問題を解く
+          </button>
+        </div>
+      )}
 
       {message && (
         <p className="mt-4 rounded-lg border border-amber/60 bg-amber/20 px-3 py-2 text-sm font-bold text-ink">
@@ -316,8 +365,37 @@ export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
         </p>
       )}
 
+      {isSessionComplete && (
+        <div className="mt-5 rounded-lg border border-line bg-white p-5 shadow-sm">
+          <p className="text-xl font-extrabold">この条件の問題をすべて解き終わりました</p>
+          <p className="mt-2 text-sm font-bold leading-7 text-muted">
+            正答数: {correctCount} / {extractedQuestions.length}
+          </p>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={retrySameConditions}
+              className="on-dark inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-extrabold"
+            >
+              <RotateCcw size={17} aria-hidden />
+              同じ条件でもう一度演習する
+            </button>
+            <button
+              type="button"
+              onClick={changeConditions}
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-line bg-white px-5 py-3 text-sm font-extrabold text-ink transition hover:border-ink"
+            >
+              条件を変更する
+            </button>
+          </div>
+        </div>
+      )}
+
       {currentQuestion && (
         <article className="mt-5 rounded-lg border border-line bg-white p-4 shadow-sm sm:p-5">
+          <p className="mb-3 text-sm font-extrabold text-leaf">
+            {shownSlugs.length}問目 / 全{extractedQuestions.length}問
+          </p>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-ink px-2.5 py-1 text-xs font-extrabold text-white">
               第{currentQuestion.examYear}回
@@ -394,16 +472,17 @@ export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
 
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-bold text-muted">
-              この条件の出題済み: {Math.min(shownSlugs.length, practicePool.length)} / {practicePool.length}
+              正答数: {correctCount} / {shownSlugs.length}
             </p>
-            <button
-              type="button"
-              onClick={goToNextQuestion}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-line bg-white px-5 py-3 text-sm font-extrabold text-ink transition hover:border-ink"
-            >
-              <RotateCcw size={17} aria-hidden />
-              次の問題へ
-            </button>
+            {showExplanation && (
+              <button
+                type="button"
+                onClick={goToNextQuestion}
+                className="on-dark inline-flex min-h-12 items-center justify-center rounded-full bg-ink px-5 py-3 text-sm font-extrabold"
+              >
+                次の問題へ
+              </button>
+            )}
           </div>
         </article>
       )}
