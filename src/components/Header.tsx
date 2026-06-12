@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { BookOpen, GraduationCap, Search } from "lucide-react";
+import { GraduationCap, Search } from "lucide-react";
 import { AuthButton } from "./AuthButton";
 
 const navItems = [
   { href: "/", label: "ホーム" },
-  { href: "/questions", label: "問題一覧" },
   { href: "/practice", label: "演習作成" },
   { href: "/admin", label: "分析" },
-  { href: "/subjects/bacteriology", label: "科目まとめ" },
-  { href: "/training/quiz/basic-67-2", label: "問題演習" }
+  { href: "/lectures", label: "講義動画" }
 ];
 
 export function Header() {
@@ -41,13 +39,6 @@ export function Header() {
             aria-label="検索へ移動"
           >
             <Search size={17} aria-hidden />
-          </Link>
-          <Link
-            href="/questions"
-            className="on-dark hidden items-center gap-1.5 rounded-full bg-ink px-3 py-2 text-sm font-bold sm:flex"
-          >
-            <BookOpen size={16} aria-hidden />
-            過去問
           </Link>
           <AuthButton />
         </div>

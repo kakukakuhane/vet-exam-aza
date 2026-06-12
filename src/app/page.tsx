@@ -1,20 +1,16 @@
 import Link from "next/link";
 import { ArrowRight, BookOpenCheck, PlayCircle, Video } from "lucide-react";
 import { ArticleCard } from "@/components/ArticleCard";
-import { PracticeBuilder } from "@/components/PracticeBuilder";
 import { QuestionCard } from "@/components/QuestionCard";
 import { SearchBox } from "@/components/SearchBox";
 import { SectionTitle } from "@/components/badges";
 import { articles } from "@/data/articles";
-import { mockReviewSchedules, mockUserAnswers } from "@/data/mockLearning";
 import { questions } from "@/data/questions";
 import { subjects } from "@/data/subjects";
-import { countByQuestionSection } from "@/lib/questionSections";
 
 export default function Home() {
   const latestQuestions = [...questions].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
   const popularArticles = [...articles].sort((a, b) => b.popularity - a.popularity);
-  const sectionCounts = countByQuestionSection(questions);
   const lecturePlaceholders = [
     {
       title: "解剖学 基礎講義",
@@ -44,19 +40,17 @@ export default function Home() {
             条件を選んで、すぐ解く。
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-8 text-muted">
-            年度、問題区分、分野、キーワードを組み合わせて、自分用の演習セットを作成できます。
+            年度、問題区分、分野を選んで、自分用の演習をすぐ開始できます。
             まずは演習作成から始めてください。
           </p>
           <div className="mt-5 grid max-w-2xl gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-line bg-white px-4 py-3">
               <p className="text-xs font-bold text-muted">収録試験</p>
-              <p className="mt-1 text-sm font-extrabold">第75/76回 国家試験</p>
+              <p className="mt-1 text-sm font-extrabold">第75回・第76回</p>
             </div>
             <div className="rounded-lg border border-line bg-white px-4 py-3">
-              <p className="text-xs font-bold text-muted">区分別収録</p>
-              <p className="mt-1 text-sm font-extrabold">
-                必須{sectionCounts.required} / A{sectionCounts.A} / B{sectionCounts.B}
-              </p>
+              <p className="text-xs font-bold text-muted">演習形式</p>
+              <p className="mt-1 text-sm font-extrabold">条件抽出＋ランダム出題</p>
             </div>
             <div className="rounded-lg border border-line bg-white px-4 py-3">
               <p className="text-xs font-bold text-muted">追加予定</p>
@@ -81,15 +75,6 @@ export default function Home() {
           </div>
         </div>
         <SearchBox questions={questions} subjects={subjects} articles={articles} />
-      </section>
-
-      <section className="mt-7" id="practice">
-        <PracticeBuilder
-          questions={questions}
-          subjects={subjects}
-          userAnswers={mockUserAnswers}
-          reviewSchedules={mockReviewSchedules}
-        />
       </section>
 
       <section className="mt-10">

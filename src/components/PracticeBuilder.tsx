@@ -1,106 +1,251 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
-import { ChevronDown, Filter, PlayCircle, Search } from "lucide-react";
-import type { ExamSection, PracticeFilters, Question, ReviewSchedule, Subject, UserAnswer } from "@/data/types";
+import { CheckCircle2, ChevronDown, Filter, PlayCircle, RotateCcw, XCircle } from "lucide-react";
+import type { ExamSection, PracticeFilters, Question, Subject } from "@/data/types";
 import { defaultPracticeFilters, filterQuestions, getAvailableExamYears } from "@/lib/practice";
-
-const customPracticeStorageKey = "vet-exam-notes:custom-practice-slugs";
 
 type PracticeBuilderProps = {
   questions: Question[];
   subjects: Subject[];
-  userAnswers: UserAnswer[];
-  reviewSchedules: ReviewSchedule[];
 };
 
-const sections: ExamSection[] = ["必須", "A", "B", "C", "D"];
-const questionLimitOptions = [10, 20, 30, 50, 100];
+type SelectOption = {
+  value: string;
+  label: string;
+};
 
-export function PracticeBuilder({
-  questions,
-  subjects,
-  userAnswers,
-  reviewSchedules
-}: PracticeBuilderProps) {
-  const years = useMemo(() => getAvailableExamYears(questions), [questions]);
-  const [filters, setFilters] = useState<PracticeFilters>({
-    ...defaultPracticeFilters,
-    examYears: years,
-    sections: ["A"],
-    requiredMode: "excludeRequired"
-  });
-  const [keyword, setKeyword] = useState("");
-  const [questionLimit, setQuestionLimit] = useState(20);
-  const [subjectsOpen, setSubjectsOpen] = useState(false);
+const sectionOptions: SelectOption[] = [
+  { value: "必須", label: "必須問題" },
+  { value: "A", label: "A問題" },
+  { value: "B", label: "B問題" }
+];
 
-  const matchingQuestions = useMemo(() => {
-    const word = keyword.trim().toLowerCase();
-    const filtered = filterQuestions(questions, filters, userAnswers, reviewSchedules).filter((question) => {
-      if (!word) return true;
-      return [
-        question.questionNumber,
-        question.title,
-        question.body,
-        question.subject,
-        question.category,
-        question.exam,
-        question.point,
-        question.explanation,
-        ...question.choices.map((choice) => choice.text)
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(word);
-    });
+const sectionLabels: Record<string, string> = {
+  必須: "必須問題",
+  A: "A問題",
+  B: "B問題"
+};
 
-    return filtered.slice(0, questionLimit);
-  }, [filters, keyword, questionLimit, questions, reviewSchedules, userAnswers]);
+function MultiSelectDropdown({
+  label,
+  options,
+  selectedValues,
+  placeholder,
+  onToggle,
+  onClear
+}: {
+  label: string;
+  options: SelectOption[];
+  selectedValues: string[];
+  placeholder: string;
+  onToggle: (value: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedLabels = options
+    .filter((option) => selectedValues.includes(option.value))
+    .map((option) => option.label);
+  const buttonText =
+    selectedLabels.length === 0
+      ? placeholder
+      : selectedLabels.length <= 2
+        ? selectedLabels.join("、")
+        : `${selectedLabels.slice(0, 2).join("、")} +${selectedLabels.length - 2}`;
 
-  const selectedSubjectNames = useMemo(
-    () =>
-      subjects
-        .filter((subject) => filters.subjectSlugs.includes(subject.slug))
-        .map((subject) => subject.name),
-    [filters.subjectSlugs, subjects]
+  return (
+    <div className="relative">
+      <span className="mb-2 block text-sm font-extrabold">{label}</span>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border border-line bg-paper px-3 py-2 text-left text-sm font-extrabold text-ink transition hover:border-ink"
+        aria-expanded={open}
+      >
+        <span className="min-w-0 truncate">{buttonText}</span>
+        <ChevronDown size={17} className={`shrink-0 transition ${open ? "rotate-180" : ""}`} aria-hidden />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 max-h-72 overflow-auto rounded-lg border border-line bg-white p-2 shadow-card">
+          <div className="mb-2 flex items-center justify-between gap-2 px-1">
+            <span className="text-xs font-bold text-muted">{selectedValues.length}件選択中</span>
+            <button
+              type="button"
+              onClick={onClear}
+              className="rounded-full border border-line px-2.5 py-1 text-xs font-bold text-muted transition hover:border-ink hover:text-ink"
+            >
+              解除
+            </button>
+          </div>
+          <div className="grid gap-1">
+            {options.map((option) => {
+              const checked = selectedValues.includes(option.value);
+              return (
+                <label
+                  key={option.value}
+                  className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm font-bold transition hover:bg-paper"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => onToggle(option.value)}
+                    className="h-4 w-4 accent-ink"
+                  />
+                  <span>{option.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function pickRandomQuestion(
+  candidates: Question[],
+  previousSlug?: string,
+  shownSlugs: string[] = []
+) {
+  if (candidates.length === 0) {
+    return { question: null, completedCycle: false };
+  }
+
+  let available = candidates.filter((question) => !shownSlugs.includes(question.slug));
+  const completedCycle = available.length === 0;
+
+  if (completedCycle) {
+    available = candidates;
+  }
+
+  const withoutImmediateRepeat = available.filter((question) => question.slug !== previousSlug);
+  const finalCandidates = withoutImmediateRepeat.length > 0 ? withoutImmediateRepeat : available;
+  const index = Math.floor(Math.random() * finalCandidates.length);
+
+  return { question: finalCandidates[index], completedCycle };
+}
+
+function makeFilters(
+  selectedYears: string[],
+  selectedSections: string[],
+  selectedSubjects: string[]
+): PracticeFilters {
+  const sections = selectedSections.filter((value): value is ExamSection =>
+    sectionOptions.some((option) => option.value === value)
   );
 
-  function toggleNumber(value: number, key: "examYears") {
-    setFilters((current) => ({
-      ...current,
-      [key]: current[key].includes(value)
-        ? current[key].filter((item) => item !== value)
-        : [...current[key], value]
-    }));
-  }
+  return {
+    ...defaultPracticeFilters,
+    examYears: selectedYears.map(Number),
+    subjectSlugs: selectedSubjects,
+    sections,
+    requiredMode: "all",
+    imageMode: "all",
+    wrongOnly: false,
+    weakOnly: false
+  };
+}
 
-  function toggleString(value: string, key: "subjectSlugs") {
-    setFilters((current) => ({
-      ...current,
-      [key]: current[key].includes(value)
-        ? current[key].filter((item) => item !== value)
-        : [...current[key], value]
-    }));
-  }
+function isCorrectChoice(question: Question, choiceId: string | null) {
+  return Boolean(choiceId && question.correctChoiceIds.includes(choiceId));
+}
 
-  function toggleSection(section: ExamSection) {
-    setFilters((current) => ({
-      ...current,
-      sections: current.sections.includes(section)
-        ? current.sections.filter((item) => item !== section)
-        : [...current.sections, section],
-      requiredMode:
-        section === "必須" && !current.sections.includes(section) ? "all" : current.requiredMode
-    }));
-  }
+export function PracticeBuilder({ questions, subjects }: PracticeBuilderProps) {
+  const yearOptions = useMemo(
+    () =>
+      getAvailableExamYears(questions).map((year) => ({
+        value: String(year),
+        label: `第${year}回`
+      })),
+    [questions]
+  );
+  const subjectOptions = useMemo(
+    () =>
+      subjects.map((subject) => ({
+        value: subject.slug,
+        label: subject.name
+      })),
+    [subjects]
+  );
 
-  function savePractice() {
-    window.localStorage.setItem(
-      customPracticeStorageKey,
-      JSON.stringify(matchingQuestions.map((question) => question.slug))
+  const [selectedYears, setSelectedYears] = useState<string[]>(yearOptions.map((option) => option.value));
+  const [selectedSections, setSelectedSections] = useState<string[]>(sectionOptions.map((option) => option.value));
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [practicePool, setPracticePool] = useState<Question[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [shownSlugs, setShownSlugs] = useState<string[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const previewCount = useMemo(() => {
+    if (selectedYears.length === 0 || selectedSections.length === 0) return 0;
+    return filterQuestions(questions, makeFilters(selectedYears, selectedSections, selectedSubjects)).length;
+  }, [questions, selectedSections, selectedSubjects, selectedYears]);
+
+  const correctChoiceText = currentQuestion
+    ? currentQuestion.choices
+        .filter((choice) => currentQuestion.correctChoiceIds.includes(choice.id))
+        .map((choice) => choice.text)
+        .join(" / ")
+    : "";
+  const answeredCorrectly = currentQuestion ? isCorrectChoice(currentQuestion, selectedChoiceId) : false;
+
+  function toggleSelected(value: string, selectedValues: string[], setter: (values: string[]) => void) {
+    setter(
+      selectedValues.includes(value)
+        ? selectedValues.filter((item) => item !== value)
+        : [...selectedValues, value]
     );
+  }
+
+  function resetAnswerState() {
+    setSelectedChoiceId(null);
+    setShowExplanation(false);
+  }
+
+  function startPractice() {
+    if (selectedYears.length === 0 || selectedSections.length === 0) {
+      setPracticePool([]);
+      setCurrentQuestion(null);
+      setMessage("年度と問題区分を1つ以上選択してください。");
+      return;
+    }
+
+    const filters = makeFilters(selectedYears, selectedSections, selectedSubjects);
+    const filtered = filterQuestions(questions, filters);
+    const { question } = pickRandomQuestion(filtered);
+
+    setPracticePool(filtered);
+    setCurrentQuestion(question);
+    setShownSlugs(question ? [question.slug] : []);
+    resetAnswerState();
+    setMessage(question ? null : "条件に一致する問題がありません。条件を広げて再抽出してください。");
+  }
+
+  function goToNextQuestion() {
+    if (!currentQuestion) return;
+    const { question, completedCycle } = pickRandomQuestion(
+      practicePool,
+      currentQuestion.slug,
+      shownSlugs
+    );
+
+    if (!question) {
+      setMessage("次に出題できる問題がありません。条件を変更して再抽出してください。");
+      return;
+    }
+
+    setCurrentQuestion(question);
+    setShownSlugs(completedCycle ? [question.slug] : [...shownSlugs, question.slug]);
+    resetAnswerState();
+    setMessage(completedCycle ? "この条件の問題を一通り解き終えたため、もう一周します。" : null);
+  }
+
+  function answerQuestion(choiceId: string) {
+    setSelectedChoiceId(choiceId);
+    setShowExplanation(true);
   }
 
   return (
@@ -113,221 +258,155 @@ export function PracticeBuilder({
           </div>
           <h2 className="text-2xl font-extrabold">演習作成</h2>
           <p className="mt-1 text-sm leading-7 text-muted">
-            条件を選んで、すぐに問題演習へ進みます。問題カードの一覧はここには表示しません。
+            年度、問題区分、分野を組み合わせて抽出し、同じ条件からランダムに1問ずつ出題します。
           </p>
         </div>
         <div className="rounded-lg bg-paper px-3 py-2 text-sm font-extrabold text-ink sm:text-right">
-          抽出予定 <span className="text-leaf">{matchingQuestions.length}</span> 問
+          抽出対象 <span className="text-leaf">{previewCount}</span> 問
         </div>
       </div>
 
-      <div className="grid gap-5">
-        <fieldset>
-          <legend className="mb-2 text-sm font-extrabold">年度</legend>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-            {years.map((year) => {
-              const active = filters.examYears.includes(year);
-              return (
-                <button
-                  key={year}
-                  type="button"
-                  onClick={() => toggleNumber(year, "examYears")}
-                  className={`rounded-lg border px-3 py-3 text-sm font-extrabold transition ${
-                    active ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink hover:border-ink"
-                  }`}
-                >
-                  第{year}回
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <MultiSelectDropdown
+          label="年度"
+          options={yearOptions}
+          selectedValues={selectedYears}
+          placeholder="年度を選択"
+          onToggle={(value) => toggleSelected(value, selectedYears, setSelectedYears)}
+          onClear={() => setSelectedYears([])}
+        />
+        <MultiSelectDropdown
+          label="問題区分"
+          options={sectionOptions}
+          selectedValues={selectedSections}
+          placeholder="問題区分を選択"
+          onToggle={(value) => toggleSelected(value, selectedSections, setSelectedSections)}
+          onClear={() => setSelectedSections([])}
+        />
+        <MultiSelectDropdown
+          label="分野"
+          options={subjectOptions}
+          selectedValues={selectedSubjects}
+          placeholder="すべての分野"
+          onToggle={(value) => toggleSelected(value, selectedSubjects, setSelectedSubjects)}
+          onClear={() => setSelectedSubjects([])}
+        />
+      </div>
 
-        <fieldset>
-          <legend className="mb-2 text-sm font-extrabold">問題区分</legend>
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
-            {sections.map((section) => {
-              const active = filters.sections.includes(section);
-              return (
-                <button
-                  key={section}
-                  type="button"
-                  onClick={() => toggleSection(section)}
-                  className={`rounded-lg border px-3 py-3 text-sm font-extrabold transition ${
-                    active ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink hover:border-ink"
-                  }`}
-                >
-                  {section === "必須" ? "必須" : `${section}問題`}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
+      <div className="mt-5 flex flex-col gap-3 rounded-lg border border-line bg-paper p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-extrabold">この条件でランダム出題</p>
+          <p className="mt-1 text-xs font-semibold leading-6 text-muted">
+            抽出後は一覧を挟まず、1問ずつ解答と解説を確認できます。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={startPractice}
+          className="on-dark inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-extrabold"
+        >
+          <PlayCircle size={18} aria-hidden />
+          抽出して開始
+        </button>
+      </div>
 
-        <fieldset>
-          <button
-            type="button"
-            onClick={() => setSubjectsOpen((value) => !value)}
-            className="flex w-full items-center justify-between gap-3 rounded-lg border border-line bg-paper px-3 py-3 text-left text-sm font-extrabold"
-            aria-expanded={subjectsOpen}
-          >
-            <span>
-              分野
-              <span className="ml-2 text-xs text-muted">
-                {selectedSubjectNames.length > 0 ? `${selectedSubjectNames.length}件選択中` : "すべて"}
-              </span>
+      {message && (
+        <p className="mt-4 rounded-lg border border-amber/60 bg-amber/20 px-3 py-2 text-sm font-bold text-ink">
+          {message}
+        </p>
+      )}
+
+      {currentQuestion && (
+        <article className="mt-5 rounded-lg border border-line bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-ink px-2.5 py-1 text-xs font-extrabold text-white">
+              第{currentQuestion.examYear}回
             </span>
-            <ChevronDown
-              size={18}
-              className={`shrink-0 transition ${subjectsOpen ? "rotate-180" : ""}`}
-              aria-hidden
-            />
-          </button>
-          {selectedSubjectNames.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {selectedSubjectNames.slice(0, 6).map((name) => (
-                <span key={name} className="rounded-full bg-mint px-2.5 py-1 text-xs font-bold text-leaf">
-                  {name}
-                </span>
-              ))}
-              {selectedSubjectNames.length > 6 && (
-                <span className="rounded-full bg-paper px-2.5 py-1 text-xs font-bold text-muted">
-                  +{selectedSubjectNames.length - 6}
-                </span>
+            <span className="rounded-full bg-mint px-2.5 py-1 text-xs font-extrabold text-leaf">
+              {sectionLabels[currentQuestion.section] ?? `${currentQuestion.section}問題`}
+            </span>
+            <span className="rounded-full bg-paper px-2.5 py-1 text-xs font-extrabold text-muted">
+              {currentQuestion.subject}
+            </span>
+            {currentQuestion.questionNumber && (
+              <span className="rounded-full bg-paper px-2.5 py-1 text-xs font-extrabold text-muted">
+                {currentQuestion.questionNumber}
+              </span>
+            )}
+          </div>
+
+          <h3 className="mt-4 text-lg font-extrabold leading-8">{currentQuestion.title}</h3>
+          <p className="mt-3 whitespace-pre-line text-base leading-8 text-ink">{currentQuestion.body}</p>
+
+          <div className="mt-5 grid gap-2">
+            {currentQuestion.choices.map((choice) => {
+              const selected = selectedChoiceId === choice.id;
+              const correct = currentQuestion.correctChoiceIds.includes(choice.id);
+              const revealClass = showExplanation
+                ? correct
+                  ? "border-leaf bg-mint text-leaf"
+                  : selected
+                    ? "border-red-300 bg-red-50 text-red-700"
+                    : "border-line bg-white text-ink"
+                : selected
+                  ? "border-ink bg-ink text-white"
+                  : "border-line bg-white text-ink hover:border-ink";
+
+              return (
+                <button
+                  key={choice.id}
+                  type="button"
+                  onClick={() => answerQuestion(choice.id)}
+                  className={`flex min-h-12 w-full items-start gap-3 rounded-lg border px-3 py-3 text-left text-sm font-bold leading-6 transition ${revealClass}`}
+                >
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-current text-xs">
+                    {choice.id}
+                  </span>
+                  <span>{choice.text}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {showExplanation && (
+            <div className="mt-5 rounded-lg border border-line bg-paper p-4">
+              <div className="flex items-center gap-2">
+                {answeredCorrectly ? (
+                  <CheckCircle2 size={20} className="text-leaf" aria-hidden />
+                ) : (
+                  <XCircle size={20} className="text-red-600" aria-hidden />
+                )}
+                <p className="text-base font-extrabold">
+                  {answeredCorrectly ? "正解です" : "不正解です"}
+                </p>
+              </div>
+              <p className="mt-3 text-sm font-bold leading-7">正答: {correctChoiceText}</p>
+              <p className="mt-3 whitespace-pre-line text-sm leading-7 text-muted">
+                {currentQuestion.explanation}
+              </p>
+              {currentQuestion.point && (
+                <p className="mt-3 rounded-lg bg-white px-3 py-2 text-sm font-bold leading-7 text-ink">
+                  ポイント: {currentQuestion.point}
+                </p>
               )}
             </div>
           )}
-          {subjectsOpen && (
-            <div className="mt-3 grid max-h-64 gap-2 overflow-auto rounded-lg border border-line bg-white p-2 sm:grid-cols-2 lg:grid-cols-3">
-              {subjects.map((subject) => {
-                const active = filters.subjectSlugs.includes(subject.slug);
-                return (
-                  <button
-                    key={subject.slug}
-                    type="button"
-                    onClick={() => toggleString(subject.slug, "subjectSlugs")}
-                    className={`rounded-lg border px-3 py-2 text-left text-sm font-bold transition ${
-                      active ? "border-leaf bg-mint text-leaf" : "border-line bg-paper text-ink hover:border-ink"
-                    }`}
-                  >
-                    {subject.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </fieldset>
 
-        <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-          <label className="block">
-            <span className="mb-2 block text-sm font-extrabold">キーワード</span>
-            <span className="flex items-center gap-2 rounded-lg border border-line bg-paper px-3 py-2 focus-within:border-ink">
-              <Search size={18} className="shrink-0 text-muted" aria-hidden />
-              <input
-                value={keyword}
-                onChange={(event) => setKeyword(event.target.value)}
-                placeholder="疾患名、薬剤名、問題番号"
-                className="min-w-0 flex-1 bg-transparent py-1 text-base outline-none placeholder:text-muted"
-              />
-            </span>
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-extrabold">出題数</span>
-            <select
-              value={questionLimit}
-              onChange={(event) => setQuestionLimit(Number(event.target.value))}
-              className="h-[46px] w-full rounded-lg border border-line bg-paper px-3 text-sm font-bold outline-none"
-            >
-              {questionLimitOptions.map((limit) => (
-                <option key={limit} value={limit}>
-                  {limit}問
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <details className="rounded-lg border border-line bg-paper px-3 py-2">
-          <summary className="cursor-pointer text-sm font-extrabold">詳細条件</summary>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {[
-              {
-                label: "必須問題のみ",
-                checked: filters.requiredMode === "requiredOnly",
-                onChange: (checked: boolean) =>
-                  setFilters((current) => ({
-                    ...current,
-                    requiredMode: checked ? "requiredOnly" : "all",
-                    sections: checked ? ["必須"] : current.sections.filter((section) => section !== "必須")
-                  }))
-              },
-              {
-                label: "必須問題を除外",
-                checked: filters.requiredMode === "excludeRequired",
-                onChange: (checked: boolean) =>
-                  setFilters((current) => ({
-                    ...current,
-                    requiredMode: checked ? "excludeRequired" : "all",
-                    sections: checked ? current.sections.filter((section) => section !== "必須") : current.sections
-                  }))
-              },
-              {
-                label: "画像問題のみ",
-                checked: filters.imageMode === "imageOnly",
-                onChange: (checked: boolean) =>
-                  setFilters((current) => ({ ...current, imageMode: checked ? "imageOnly" : "all" }))
-              },
-              {
-                label: "間違えた問題のみ",
-                checked: Boolean(filters.wrongOnly),
-                onChange: (checked: boolean) =>
-                  setFilters((current) => ({ ...current, wrongOnly: checked }))
-              },
-              {
-                label: "苦手問題のみ",
-                checked: Boolean(filters.weakOnly),
-                onChange: (checked: boolean) =>
-                  setFilters((current) => ({ ...current, weakOnly: checked }))
-              }
-            ].map((item) => (
-              <label
-                key={item.label}
-                className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-line bg-white px-3 py-2 text-sm font-bold"
-              >
-                {item.label}
-                <input
-                  type="checkbox"
-                  checked={item.checked}
-                  onChange={(event) => item.onChange(event.target.checked)}
-                />
-              </label>
-            ))}
-          </div>
-        </details>
-
-        <div className="flex flex-col gap-3 rounded-lg border border-line bg-paper p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-extrabold">この条件で {matchingQuestions.length} 問</p>
-            <p className="mt-1 text-xs font-semibold leading-6 text-muted">
-              演習開始時に条件を保存し、カスタム演習として出題します。
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-bold text-muted">
+              この条件の出題済み: {Math.min(shownSlugs.length, practicePool.length)} / {practicePool.length}
             </p>
+            <button
+              type="button"
+              onClick={goToNextQuestion}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-line bg-white px-5 py-3 text-sm font-extrabold text-ink transition hover:border-ink"
+            >
+              <RotateCcw size={17} aria-hidden />
+              次の問題へ
+            </button>
           </div>
-          <Link
-            href="/training/quiz/custom"
-            onClick={savePractice}
-            aria-disabled={matchingQuestions.length === 0}
-            className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-extrabold ${
-              matchingQuestions.length === 0
-                ? "pointer-events-none border border-line bg-white text-muted"
-                : "on-dark bg-ink"
-            }`}
-          >
-            <PlayCircle size={18} aria-hidden />
-            演習開始
-          </Link>
-        </div>
-      </div>
+        </article>
+      )}
     </section>
   );
 }
